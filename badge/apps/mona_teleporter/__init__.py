@@ -79,6 +79,34 @@ ALL_EXPEDITION_CODES = (0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99)
 # Tour and Reset: never sent just by navigating onto them
 SPECIAL_CODES = (0x00, 0xF0)
 
+LOCAL_DESCRIPTIONS = {0x00: "Unlocks all 9 on this badge", 0xF0: "Wipes your own progress"}
+
+try:
+    from badgeware import State
+except ImportError:
+    State = None
+
+# Same file and format as the menu's Mona's Expedition tile (apps/menu/achievements.py)
+def load_achievements():
+    data = {"unlocked": [], "shown": None}
+    if State is not None:
+        try:
+            State.load("achievements", data)
+        except Exception:
+            pass
+    unlocked = set(i for i in data.get("unlocked") or [] if isinstance(i, int) and 0 <= i < len(ALL_EXPEDITION_CODES))
+    shown = data.get("shown")
+    return unlocked, shown if shown in unlocked else None
+
+def save_achievements(unlocked, shown):
+    if State is None:
+        return False
+    try:
+        State.save("achievements", {"unlocked": sorted(unlocked), "shown": shown})
+        return True
+    except Exception:
+        return False
+
 # Preload award images
 images = {}
 for item in CATALOG:
@@ -191,6 +219,21 @@ class AppState:
         self.tour_step = 0
         self.tour_next_tick = 0
         self.burst_flash = 0.0
+        self.local_mode = False
+        self.unlocked, self.shown = load_achievements()
+        self.save_failed = False
+
+    def apply_local(self, code):
+        if code == RESET_CODE:
+            self.unlocked = set()
+            self.shown = None
+        else:
+            indices = range(len(ALL_EXPEDITION_CODES)) if code == 0x00 else (ALL_EXPEDITION_CODES.index(code),)
+            for index in indices:
+                self.unlocked.add(index)
+                if self.shown is None:
+                    self.shown = index
+        self.save_failed = not save_achievements(self.unlocked, self.shown)
 
     def trigger_transmit(self, is_manual=False):
         now = badge.ticks
@@ -201,7 +244,9 @@ class AppState:
         self.pulse_active_until = now + 240
         self.burst_flash = 1.0
 
-        if code == 0x00:
+        if self.local_mode:
+            self.apply_local(code)
+        elif code == 0x00:
             # Tour Guide mode: Start multi-step sequence
             self.tour_active = True
             self.tour_step = 0
@@ -276,9 +321,13 @@ def draw():
     screen.font = font.ark
     screen.text("MONA TELEPORTER", 10, 6)
 
-    # Auto-broadcast pill
-    pill_text = "AUTO: ON" if state.auto_broadcast else "AUTO: OFF"
-    pill_col = accent_green if state.auto_broadcast else text_dim
+    # Mode / auto-broadcast pill
+    if state.local_mode:
+        pill_text = "LOCAL"
+        pill_col = accent_gold
+    else:
+        pill_text = "AUTO: ON" if state.auto_broadcast else "AUTO: OFF"
+        pill_col = accent_green if state.auto_broadcast else text_dim
     screen.pen = pill_col
     tw, _ = screen.measure_text(pill_text)
     screen.text(pill_text, w - tw - 12, 6)
@@ -295,6 +344,8 @@ def draw():
     slug = item[2]
     rgb = item[3]
     desc = item[4]
+    if state.local_mode:
+        desc = LOCAL_DESCRIPTIONS.get(code, desc)
 
     loc_col = color.rgb(*rgb)
 
@@ -320,7 +371,9 @@ def draw():
     screen.text(idx_str, card_x + 14, card_y + 12)
 
     # Hex Code pill on right of card
-    if code == 0x00:
+    if state.local_mode:
+        code_str = f"{len(state.unlocked)}/{len(ALL_EXPEDITION_CODES)} UNLOCKED"
+    elif code == 0x00:
         code_str = "CMD: 0x11..0x99"
     else:
         code_str = f"CMD: 0x{code:02X} | ADDR: 0x{BEACON_ADDRESS:02X}"
@@ -370,7 +423,26 @@ def draw():
     screen.text(desc, tx, card_y + 76)
 
     # Live Beacon Signal Status
-    if state.tour_active:
+    if state.local_mode:
+        if state.save_failed:
+            sig_str = "Could not save progress"
+            sig_col = accent_red
+        elif is_pulsing:
+            sig_str = "Saved to this badge"
+            sig_col = accent_green
+        elif code == 0x00:
+            sig_str = "SELECT: unlock all 9"
+            sig_col = text_dim
+        elif code == RESET_CODE:
+            sig_str = "SELECT: wipe your progress"
+            sig_col = accent_red
+        elif ALL_EXPEDITION_CODES.index(code) in state.unlocked:
+            sig_str = "UNLOCKED on this badge"
+            sig_col = accent_green
+        else:
+            sig_str = "LOCKED - SELECT to unlock"
+            sig_col = text_dim
+    elif state.tour_active:
         sig_str = f"BEAMING: Station {state.tour_step}/{len(ALL_EXPEDITION_CODES)}..."
         sig_col = accent_gold
     elif is_pulsing:
@@ -401,13 +473,17 @@ def draw():
     # Instructions line 1: Tap instructions
     screen.font = font.ark
     screen.pen = accent_cyan
-    guide_text = "Point top IR LEDs at another badge to unlock"
+    if state.local_mode:
+        guide_text = "Unlocks awards on this badge"
+        btns_text = "[</>] Station  [SEL] Unlock  [v] Remote"
+    else:
+        guide_text = "Point top IR LEDs at another badge to unlock"
+        btns_text = "[</>] Station  [SEL] Burst  [^] Auto  [v] Local"
     gw, _ = screen.measure_text(guide_text)
     screen.text(guide_text, (w - gw) // 2, h - 36)
 
     # Instructions line 2: Button controls
     screen.pen = text_dim
-    btns_text = "[< / >] Station   [SELECT] Burst   [^/v] Auto"
     bw, _ = screen.measure_text(btns_text)
     screen.text(btns_text, (w - bw) // 2, h - 18)
 
@@ -416,6 +492,8 @@ def draw():
 # ---------------------------------------------------------------------------
 def navigate(step):
     state.selected = (state.selected + step) % len(CATALOG)
+    if state.local_mode:
+        return
     if CATALOG[state.selected][1] in SPECIAL_CODES:
         state.auto_broadcast = False
     else:
@@ -433,8 +511,16 @@ def update():
     if badge.pressed(BUTTON_SELECT):
         state.trigger_transmit(is_manual=True)
 
-    # Up / Down toggles auto-broadcast
-    if badge.pressed(BUTTON_UP) or badge.pressed(BUTTON_DOWN):
+    # Down switches between Remote (IR) and Local mode
+    if badge.pressed(BUTTON_DOWN):
+        state.local_mode = not state.local_mode
+        state.save_failed = False
+        if state.local_mode:
+            state.auto_broadcast = False
+            state.tour_active = False
+
+    # Up toggles auto-broadcast (Remote only)
+    if badge.pressed(BUTTON_UP) and not state.local_mode:
         state.auto_broadcast = not state.auto_broadcast
         if state.auto_broadcast:
             state.trigger_transmit(is_manual=False)

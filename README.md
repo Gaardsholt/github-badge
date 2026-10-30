@@ -7,7 +7,7 @@ My apps for the GitHub Universe 2026 badge. The badge runs MicroPython on an RP2
 | App                                                     | What it does                                                                                | Size   |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------ |
 | [Beam](badge/apps/beam/README.md)                       | Send an app from one badge to another over Bluetooth by holding them back to back.          | 37 KB  |
-| [Mona Teleporter](badge/apps/mona_teleporter/README.md) | Sends the infrared codes for the Mona's Expedition locations, so nearby badges unlock them. | 145 KB |
+| [Mona Teleporter](badge/apps/mona_teleporter/README.md) | Sends the infrared codes for the Mona's Expedition locations, so nearby badges unlock them. | 156 KB |
 | [Patch AI](badge/apps/patch_ai/README.md)               | An animated denim robot that waves, dances and naps.                                        | 124 KB |
 
 Mona Teleporter can unlock every location, or wipe all progress, on someone else's badge. Ask before you point it at anyone.

@@ -29,13 +29,25 @@ Ask before you use either one on someone else's badge. Landing on either entry t
 
 ## Controls
 
-| Button       | Action                                                               |
-| ------------ | -------------------------------------------------------------------- |
-| LEFT / RIGHT | Previous / next entry, and send it once (Tour and Reset aren't sent) |
-| SELECT       | Send the current entry now                                           |
-| UP / DOWN    | Turn auto mode on or off                                             |
+| Button       | Action                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------ |
+| LEFT / RIGHT | Previous / next entry. In Remote mode it also sends the entry once (except Tour and Reset) |
+| SELECT       | Remote: send the current entry now. Local: unlock it on this badge                         |
+| UP           | Turn auto mode on or off (Remote only)                                                     |
+| DOWN         | Switch between Remote and Local mode                                                       |
 
 In auto mode the badge repeats the current entry every second. While it transmits, the case LEDs light up and rings spread out from the icon.
+
+## Local mode
+
+Press DOWN to unlock locations on your own badge instead of someone else's. The header shows `LOCAL` and the card shows how many locations you've unlocked.
+
+Your badge can't receive its own IR signal, because the menu only listens for beacons while it's open. So Local mode writes your progress straight to `/state/achievements.json`, the same file the menu's Mona's Expedition tile uses. That has two side effects:
+
+- The "Location Unlocked!" animation doesn't play. The award just shows up as unlocked when you go back to the menu.
+- **Expedition Reset** wipes your own progress as soon as you press SELECT on it.
+
+In Local mode, LEFT and RIGHT only move between entries. Nothing is unlocked until you press SELECT. **Tour: Unlock All** unlocks all nine at once. The app always starts in Remote mode.
 
 ## How to tap
 
@@ -46,7 +58,7 @@ In auto mode the badge repeats the current entry every second. While it transmit
 
 ## Size
 
-145 KB (149,251 bytes) on the badge, not counting `__pycache__`. That's under [Beam](../beam/README.md)'s 250 KB limit, so you can beam it to another badge.
+156 KB (160,150 bytes) on the badge, not counting `__pycache__`. That's under [Beam](../beam/README.md)'s 250 KB limit, so you can beam it to another badge.
 
 ## Deploying to the badge
 
